@@ -43,6 +43,8 @@ services:
     volumes:
       - /opt/redash/postgres-data:/var/lib/postgresql/data
     restart: unless-stopped
+###########################################################################################
+#######NGINX moet ertussen uit gesloopt worden i.v.m. traefik, of beide lagen gebruiken#####
   nginx:
     image: redash/nginx:latest
     ports:
@@ -52,6 +54,7 @@ services:
     links:
       - server:redash
     restart: always
+############################################################################################
   worker:
     <<: *redash-service
     command: worker
