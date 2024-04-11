@@ -1,18 +1,32 @@
+#TODO: Is een setup.sh + bijbehorende mappen hierbij nog wel nodig? hebben een dockerhub image nmlk.
+#TODO:Het lijkt erop dat de setup slechts docker installeerd .e.d, dus niet nodig?
+#TODO:overbodige meuk kan dus weg op compose na?
+
 x-redash-service: &redash-service
-  image: redash/redash:__TAG__
+  image: redash/redash:preview #Laatste non-preview = 10.1.0.b50633
   depends_on:
     - postgres
     - redis
-  env_file: /opt/redash/env
+  env_file: /opt/redash/env #TODO: deze nog bekijken en nagaan
   restart: always
 services:
   server:
     <<: *redash-service
     command: server
-    ports:
-      - "__PORT__:5000"
+    expose:
+      - "5000" #TODO:variabel maken naar .env? Neen, alleen 5000 is genoeg. 1 instance van deze app, wellicht wel anders bij whitelabel o.i.d? o
+      #TODO:of wordt dat gooddata met widgets
     environment:
-      REDASH_WEB_WORKERS: 4
+      REDASH_WEB_WORKERS: 8
+    #TODO: traefik regels voor web access
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.${PROJECT}-server.loadbalancer.server.port=5000" # in case multipe ports are exposed, this label forces 5000
+      - "traefik.http.routers.${PROJECT}-secure.tls=true"
+      - "traefik.http.routers.${PROJECT}-secure.tls.certresolver=${CERTRESOLVER}"
+      - "traefik.http.routers.${PROJECT}-secure.rule=Host(`${APPLICATION_NAME}.${HOSTINGDOMAIN}`)"
+      - "traefik.docker.network=broker" # https://doc.traefik.io/traefik/providers/docker/#network
+
   scheduler:
     <<: *redash-service
     command: scheduler
@@ -25,7 +39,7 @@ services:
       - server
     environment:
       QUEUES: "scheduled_queries,schemas"
-      WORKERS_COUNT: 1
+      WORKERS_COUNT: 3
   adhoc_worker:
     <<: *redash-service
     command: worker
@@ -33,7 +47,7 @@ services:
       - server
     environment:
       QUEUES: "queries"
-      WORKERS_COUNT: 2
+      WORKERS_COUNT: 4
   redis:
     image: redis:7-alpine
     restart: unless-stopped
@@ -44,20 +58,20 @@ services:
       - /opt/redash/postgres-data:/var/lib/postgresql/data
     restart: unless-stopped
 ###########################################################################################
-#######NGINX moet ertussen uit gesloopt worden i.v.m. traefik, of beide lagen gebruiken#####
-  nginx:
-    image: redash/nginx:latest
-    ports:
-      - "80:80"
-    depends_on:
-      - server
-    links:
-      - server:redash
-    restart: always
-############################################################################################
+#######NGINX moet ertussen uit gesloopt worden i.v.m. traefik##############################
+#  nginx:
+#    image: redash/nginx:latest
+#    ports:
+#      - "80:80"
+#    depends_on:
+#      - server
+#    links:
+#      - server:redash
+#    restart: always
+###########################################################################################
   worker:
     <<: *redash-service
     command: worker
     environment:
       QUEUES: "periodic,emails,default"
-      WORKERS_COUNT: 1
+      WORKERS_COUNT: 3
